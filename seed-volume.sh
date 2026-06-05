@@ -222,6 +222,9 @@ KDEOF
 <!-- /weekly thêm đề xuất phía dưới -->
 KDEOF
 
+# Đảm bảo gateway (user hermes, UID 10000) đọc/ghi được não + KB
+chown -R 10000:10000 "$KB" "$DATA/SOUL.md" "$DATA/config.yaml" 2>/dev/null || true
+
 echo "Done. Cây thư mục:"
 find "$DATA" -maxdepth 3 -name '*.md' -o -name 'config.yaml' | sort
 echo "Khởi động lại gateway để nạp SOUL.md/config: hermes gateway restart (hoặc redeploy)."
