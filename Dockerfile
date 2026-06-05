@@ -300,6 +300,12 @@ ENV PATH="/opt/hermes/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:${PATH}"
 RUN mkdir -p /opt/data
 # VOLUME [ "/opt/data" ]  # disabled for Railway (Metal builder rejects Dockerfile VOLUME; use Railway Volumes mounted at /opt/data)
 
+# Restore executable bits stripped when the repo is checked out / committed on a
+# filesystem without Unix exec perms (e.g. Windows/NTFS). Without this, s6
+# cont-init + main-wrapper fail with "Permission denied" (exit 126) -> crash loop.
+RUN find /opt/hermes/docker -type f -name '*.sh' -exec chmod 0755 {} + && \
+    find /etc/s6-overlay/s6-rc.d -type f \( -name run -o -name up -o -name down -o -name finish \) -exec chmod 0755 {} +
+
 # s6-overlay's /init is PID 1. It sets up the supervision tree, runs
 # /etc/cont-init.d/* (our stage2 hook), starts s6-rc services
 # declared in /etc/s6-overlay/s6-rc.d/, then exec's its remaining
