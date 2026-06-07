@@ -14,7 +14,7 @@ set -euo pipefail
 DATA="${HERMES_HOME:-/opt/data}"
 KB="$DATA/mpm"
 echo "Seeding MicroPokerMaster brain into: $DATA"
-mkdir -p "$KB/knowledge" "$KB/prompts" "$KB/insights" "$KB/content" "$KB/landing-page" "$KB/competitors" "$KB/docs"
+mkdir -p "$KB/knowledge" "$KB/prompts" "$KB/insights" "$KB/content" "$KB/landing-page" "$KB/competitors" "$KB/docs" "$KB/scripts"
 
 # ── config.yaml (Gemini + Notion env passthrough to tools) ────────────
 cat > "$DATA/config.yaml" <<'MPMEOF'
@@ -56,7 +56,12 @@ MANDATORY: before answering any content request, READ mpm/knowledge/brand-kit.md
 
 ## Notion (your real data source — "Growth OS")
 A Notion integration is already configured. The "Growth OS" workspace holds 7 databases: ICP & Pain Database (real player pains), Hook Library, Content Ideas Database, Production Pipeline, Prompt Library, Channel Calendar, Performance Dashboard.
-To read them, use the bundled **notion** skill via the **terminal** tool — run skill_view notion for the exact API recipe (it is NOT a dedicated tool; do not look for a "notion" tool). For ideas, read the ICP & Pain Database rows and ground content in those real pains. If a call fails, say so and fall back to brand-kit — never invent data.
+To read them, use the bundled **notion** skill via the **terminal** tool — run skill_view notion for the exact API recipe (it is NOT a dedicated tool; do not look for a "notion" tool). Database IDs are listed in mpm/knowledge/brand-kit.md — use them directly, no need to search. For ideas, read the ICP & Pain Database rows and ground content in those real pains. If a call fails, say so and fall back to brand-kit — never invent data.
+
+### Saving content back into Notion (write-back)
+To save a generated idea into the **Content Ideas Database** as a Draft, run this helper via terminal (it handles the Notion write; the credential stays in env):
+`python mpm/scripts/save_idea.py --title "..." --hook "..." [--cta "..."] [--format Tweet|Reddit|Short|Blog|Carousel|Email] [--angle Story|Contrarian|Myth-bust|Step-by-step|Checklist] [--pillar "Money Pain"|Tactical|Ego|"AI Shock"|...] [--priority P0|P1|P2] [--hand "Top Pair"|"Bluff Catcher"|...] [--hero UTG|MP|CO|BTN|SB|BB] [--villain ...] [--decision Call|Fold|Raise|Jam|Check|Bet] [--pain-id <ICP&Pain row id to link Related Pain>]`
+It creates a row with Status=Draft. The founder reviews/edits in Notion, then moves it to Scheduled/Published by hand. NEVER auto-post.
 
 ## Out of scope for V1
 No lead scoring, no CRM, no auto-post, no competitor agent, no paid-ads manager.
@@ -113,6 +118,15 @@ English, poker-native, real grinder, peer-to-peer. Not corporate, not guru-hype.
 ## Visual brand
 - Background ink #050816. Primary mint #57f287 (soft #7af5a3, deep #1e8b4a). Logic blue #6aa9ff.
 - Fonts: Bebas Neue (display), Inter (body), JetBrains Mono (numbers). Mark: mint spade. Dark, cinematic, glassmorphism, felt texture.
+
+## Notion Growth OS — database IDs (use directly, no need to search)
+- ICP & Pain Database: c5e45bc4-4f13-41c5-a59e-e001a49071c3
+- Content Ideas Database: b019a5fc-369b-4203-bc7d-7675f564586f
+- Hook Library: 358a5a3f-fec6-80a6-b912-f714680f4622
+- Production Pipeline: c3513c12-61f7-41d3-bebd-b8b9ff5583a0
+- Channel Calendar: 358a5a3f-fec6-80d2-bbfa-db3cfc2b966d
+- Prompt Library: 358a5a3f-fec6-80bb-98af-c06b33814e07
+- Performance Dashboard: 358a5a3f-fec6-8098-bef9-d63ddf2bf6af
 
 ## Hard don'ts
 - No fabricated numbers. No income guarantees (poker is gambling). Never auto-post; founder approves everything.
@@ -177,7 +191,10 @@ N. [TYPE · Topic] HOOK (player's voice)
 ## Quality
 - Hook in player's voice, no internal jargon. Never fabricate numbers -> [founder fills in].
 - Default 10 ideas; "ideas bankroll" focuses a topic but still 4 types.
-- End: "Type write N to turn an idea into posts." (no leading slash)
+- End: "Type write N to turn an idea into posts, or 'save N' to push it into Notion as a Draft." (no leading slash)
+
+## Save back to Notion (write-back)
+When the founder says "save N" (or asks to save ideas), write each chosen idea into the Content Ideas Database as a Draft using `python mpm/scripts/save_idea.py` (see SOUL "Saving content back into Notion"). Map: --title (a clear idea title), --hook, --format, --angle, --pillar, --hand, --hero, --decision, and --pain-id (the id of the source ICP & Pain row this idea came from, to link Related Pain). Status stays Draft for founder review — never auto-post.
 MPMEOF
 
 # ── prompts/write.md ──────────────────────────────────────────────────
@@ -243,6 +260,49 @@ Sunday recap the founder reads in ~5 min. Read this week's insights/ and content
 - English, short, actionable. No fabricated numbers/results; missing -> say so.
 - Every suggestion answers: how does this grow the player audience / get MPM users?
 - Thin week (just starting): say so + suggest focusing on content/insight.
+MPMEOF
+
+# ── scripts/save_idea.py (write-back helper; agent runs it via terminal) ──
+cat > "$KB/scripts/save_idea.py" <<'MPMEOF'
+#!/usr/bin/env python3
+"""save_idea.py — create one row in the MPM Content Ideas Database (Notion).
+Agent calls this with simple args instead of hand-building Notion JSON. Credential
+read from env (NOTION_API_KEY). Status defaults to Draft — founder reviews in Notion."""
+import argparse, json, os, sys, urllib.request, urllib.error
+DB_ID = "b019a5fc-369b-4203-bc7d-7675f564586f"  # Content Ideas Database
+NOTION_VERSION = "2022-06-28"
+SELECTS = {"format":"Format","angle":"Angle","pillar":"Content Pillar","priority":"Priority",
+           "hand":"Hand Category","hero":"Hero Position","villain":"Villain Position",
+           "decision":"Recommended Decision","status":"Status"}
+TEXTS = {"hook":"Hook","cta":"CTA"}
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--title", required=True)
+    for f in ["hook","cta","format","angle","pillar","priority","hand","hero","villain","decision"]:
+        ap.add_argument("--"+f)
+    ap.add_argument("--status", default="Draft")
+    ap.add_argument("--pain-id", dest="pain_id")
+    a = ap.parse_args()
+    key = os.environ.get("NOTION_API_KEY") or os.environ.get("NOTION_API_TOKEN")
+    if not key:
+        print("ERROR: NOTION_API_KEY not in environment", file=sys.stderr); sys.exit(2)
+    props = {"Idea Title": {"title": [{"text": {"content": a.title}}]}}
+    for arg,name in TEXTS.items():
+        v = getattr(a, arg)
+        if v: props[name] = {"rich_text": [{"text": {"content": v}}]}
+    for arg,name in SELECTS.items():
+        v = getattr(a, arg)
+        if v: props[name] = {"select": {"name": v}}
+    if a.pain_id: props["Related Pain"] = {"relation": [{"id": a.pain_id}]}
+    body = json.dumps({"parent":{"database_id":DB_ID},"properties":props}).encode()
+    req = urllib.request.Request("https://api.notion.com/v1/pages", data=body, method="POST",
+        headers={"Authorization":f"Bearer {key}","Notion-Version":NOTION_VERSION,"Content-Type":"application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r: d = json.load(r)
+        print("OK:", d.get("url") or d.get("id"))
+    except urllib.error.HTTPError as e:
+        print("ERROR", e.code, e.read().decode()[:400], file=sys.stderr); sys.exit(1)
+if __name__ == "__main__": main()
 MPMEOF
 
 # ── KB seeds (don't overwrite existing) ───────────────────────────────
