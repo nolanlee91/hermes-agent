@@ -58,10 +58,14 @@ MANDATORY: before answering any content request, READ mpm/knowledge/brand-kit.md
 A Notion integration is already configured. The "Growth OS" workspace holds 7 databases: ICP & Pain Database (real player pains), Hook Library, Content Ideas Database, Production Pipeline, Prompt Library, Channel Calendar, Performance Dashboard.
 To read them, use the bundled **notion** skill via the **terminal** tool — run skill_view notion for the exact API recipe (it is NOT a dedicated tool; do not look for a "notion" tool). Database IDs are listed in mpm/knowledge/brand-kit.md — use them directly, no need to search. For ideas, read the ICP & Pain Database rows and ground content in those real pains. If a call fails, say so and fall back to brand-kit — never invent data.
 
-### Saving content back into Notion (write-back)
-To save a generated idea into the **Content Ideas Database** as a Draft, run this helper via terminal (it handles the Notion write; the credential stays in env):
-`python mpm/scripts/save_idea.py --title "..." --hook "..." [--cta "..."] [--format Tweet|Reddit|Short|Blog|Carousel|Email] [--angle Story|Contrarian|Myth-bust|Step-by-step|Checklist] [--pillar "Money Pain"|Tactical|Ego|"AI Shock"|...] [--priority P0|P1|P2] [--hand "Top Pair"|"Bluff Catcher"|...] [--hero UTG|MP|CO|BTN|SB|BB] [--villain ...] [--decision Call|Fold|Raise|Jam|Check|Bet] [--pain-id <ICP&Pain row id to link Related Pain>]`
-It creates a row with Status=Draft. The founder reviews/edits in Notion, then moves it to Scheduled/Published by hand. NEVER auto-post.
+### Saving back into Notion — TWO stages (only save what the founder CHOOSES; never auto-save all)
+- **Stage ② save a BRIEF** (founder says "save N" after `ideas`): terminal →
+  `python mpm/scripts/save_idea.py --title "..." --hook "..." [--cta ...] [--format Tweet|Reddit|Short|Blog|Carousel|Email] [--angle Story|Contrarian|Myth-bust|...] [--pillar "Money Pain"|Tactical|Ego|"AI Shock"|...] [--priority P0|P1|P2] [--hand "Top Pair"|...] [--hero UTG|...] [--decision Fold|...] [--pain-id <ICP&Pain row id>]`
+  → row in **Content Ideas Database** (Status=Draft). Prints `id=<row id>` — REMEMBER it for stage ③.
+- **Stage ③ save WRITTEN content** (after `write`): terminal →
+  `python mpm/scripts/save_content.py --title "..." --script "<full post>" [--caption ...] [--hashtags ...] [--platform X,Reddit] [--voice "Savage Coach"|"Calm Analyst"|"Fast TikTok"|"Dramatic Narrator"] [--status "Draft Generated"] [--source-idea <Content Ideas row id from ②>] [--pain-id <ICP row id>]`
+  → row in **Production Pipeline** (Status=Draft Generated), linked to the brief via Source Idea.
+Founder reviews/edits in Notion and advances Status by hand. NEVER auto-post.
 
 ## Out of scope for V1
 No lead scoring, no CRM, no auto-post, no competitor agent, no paid-ads manager.
@@ -215,11 +219,16 @@ Single strong post or short thread (2–5). First line = hook. Teach something r
 ### REDDIT (r/poker, r/livepoker — value-first)
 150–300 words. Genuinely useful post / honest story. Lead with insight, not product; mention MPM once, low-key. Plain text, invites discussion.
 
+## Save the written content to Notion (Production Pipeline) — when founder confirms
+After the founder is happy with a version, save it as a Draft in the **Production Pipeline** via terminal:
+`python mpm/scripts/save_content.py --title "..." --script "<full post text>" [--caption ...] [--hashtags ...] [--platform X,Reddit] [--voice ...] [--source-idea <Content Ideas row id, if the brief was saved>] [--pain-id <ICP row id>]`
+Status stays "Draft Generated" for founder review. NEVER auto-post. Only save when the founder asks (e.g. "save this" / "save to pipeline").
+
 ## Rules
 - English, real grinder, peer-to-peer. Never fabricate numbers -> [founder fills in].
 - Value-first; mention MPM second and lightly. Stay on study > volume; no "win easy money".
 - No income guarantees (poker is gambling). Each version genuinely different.
-- End: "Want a different tone/length, or write another idea?"
+- End: "Want a different tone/length, save this to the pipeline, or write another idea?"
 MPMEOF
 
 # ── prompts/capture.md ────────────────────────────────────────────────
@@ -299,7 +308,56 @@ def main():
         headers={"Authorization":f"Bearer {key}","Notion-Version":NOTION_VERSION,"Content-Type":"application/json"})
     try:
         with urllib.request.urlopen(req, timeout=20) as r: d = json.load(r)
-        print("OK:", d.get("url") or d.get("id"))
+        print("OK id=" + d["id"] + " url=" + (d.get("url") or ""))
+    except urllib.error.HTTPError as e:
+        print("ERROR", e.code, e.read().decode()[:400], file=sys.stderr); sys.exit(1)
+if __name__ == "__main__": main()
+MPMEOF
+
+# ── scripts/save_content.py (stage 3: write content -> Production Pipeline) ──
+cat > "$KB/scripts/save_content.py" <<'MPMEOF'
+#!/usr/bin/env python3
+"""save_content.py — create one row in the MPM Production Pipeline (Notion).
+The WRITTEN content (script/caption), linked back to its Content Ideas brief via
+--source-idea. Status defaults to "Draft Generated"; founder reviews in Notion."""
+import argparse, json, os, sys, urllib.request, urllib.error
+DB_ID = "c3513c12-61f7-41d3-bebd-b8b9ff5583a0"  # Production Pipeline
+NOTION_VERSION = "2022-06-28"
+SELECTS = {"voice":"Voice Style","visual":"Visual Style","subtitle":"Subtitle Style",
+           "decision":"Final Decision","status":"Status"}
+TEXTS = {"script":"Script","caption":"Caption","hashtags":"Hashtags"}
+RELATIONS = {"source_idea":"Source Idea","pain_id":"ICP & Pain Database","hook_id":"Hook Library"}
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--title", required=True)
+    for f in ["script","caption","hashtags","platform","voice","visual","subtitle","decision"]:
+        ap.add_argument("--"+f)
+    ap.add_argument("--status", default="Draft Generated")
+    ap.add_argument("--source-idea", dest="source_idea")
+    ap.add_argument("--pain-id", dest="pain_id")
+    ap.add_argument("--hook-id", dest="hook_id")
+    a = ap.parse_args()
+    key = os.environ.get("NOTION_API_KEY") or os.environ.get("NOTION_API_TOKEN")
+    if not key:
+        print("ERROR: NOTION_API_KEY not in environment", file=sys.stderr); sys.exit(2)
+    props = {"Content Name": {"title": [{"text": {"content": a.title}}]}}
+    for arg,name in TEXTS.items():
+        v = getattr(a, arg)
+        if v: props[name] = {"rich_text": [{"text": {"content": v}}]}
+    for arg,name in SELECTS.items():
+        v = getattr(a, arg)
+        if v: props[name] = {"select": {"name": v}}
+    if a.platform:
+        props["Platform"] = {"multi_select": [{"name": p.strip()} for p in a.platform.split(",") if p.strip()]}
+    for arg,name in RELATIONS.items():
+        v = getattr(a, arg)
+        if v: props[name] = {"relation": [{"id": v}]}
+    body = json.dumps({"parent":{"database_id":DB_ID},"properties":props}).encode()
+    req = urllib.request.Request("https://api.notion.com/v1/pages", data=body, method="POST",
+        headers={"Authorization":f"Bearer {key}","Notion-Version":NOTION_VERSION,"Content-Type":"application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r: d = json.load(r)
+        print("OK id=" + d["id"] + " url=" + (d.get("url") or ""))
     except urllib.error.HTTPError as e:
         print("ERROR", e.code, e.read().decode()[:400], file=sys.stderr); sys.exit(1)
 if __name__ == "__main__": main()
