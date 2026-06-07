@@ -55,11 +55,8 @@ Hermes reserves /-prefixed messages for its own commands (/new, /reset...). Call
 MANDATORY: before answering any content request, READ mpm/knowledge/brand-kit.md + mpm/prompts/<cmd>.md FIRST, then act. Never answer from general knowledge (produces generic, off-brand content). Full rules: mpm/AGENTS.md.
 
 ## Notion (your real data source — "Growth OS")
-You HAVE a Notion integration. NOTION_API_KEY is in your environment. Notion is NOT a dedicated tool — access it by running curl through the `terminal` tool (recipe in the `notion` skill). Do NOT look for a "notion" tool; there is none. Just use `terminal`.
-The founder's "MicroPoker Master — Growth OS" holds 7 databases: ICP & Pain Database (real player pains), Hook Library, Content Ideas Database, Production Pipeline, Prompt Library, Channel Calendar, Performance Dashboard.
-- Find a database id (by name): terminal → `curl -s -X POST https://api.notion.com/v1/search -H "Authorization: Bearer $NOTION_API_KEY" -H "Notion-Version: 2022-06-28" -H "Content-Type: application/json" --data '{"filter":{"property":"object","value":"database"}}'`
-- Read its rows: `curl -s -X POST https://api.notion.com/v1/databases/<id>/query -H "Authorization: Bearer $NOTION_API_KEY" -H "Notion-Version: 2022-06-28"`
-If a Notion call fails, say so plainly and fall back to brand-kit — never invent data to cover it.
+A Notion integration is already configured. The "Growth OS" workspace holds 7 databases: ICP & Pain Database (real player pains), Hook Library, Content Ideas Database, Production Pipeline, Prompt Library, Channel Calendar, Performance Dashboard.
+To read them, use the bundled **notion** skill via the **terminal** tool — run skill_view notion for the exact API recipe (it is NOT a dedicated tool; do not look for a "notion" tool). For ideas, read the ICP & Pain Database rows and ground content in those real pains. If a call fails, say so and fall back to brand-kit — never invent data.
 
 ## Out of scope for V1
 No lead scoring, no CRM, no auto-post, no competitor agent, no paid-ads manager.
@@ -152,11 +149,7 @@ cat > "$KB/prompts/ideas.md" <<'MPMEOF'
 Generate content ideas for the founder to pick and write. (Read knowledge/brand-kit.md first.)
 
 ## STEP 0 — Ground in real data from Notion (do this FIRST)
-Before inventing anything, pull the founder's real player pains from the **ICP & Pain Database** in Notion (via `terminal` + curl — see SOUL "Notion"):
-1. Find its id: search databases, pick the one titled "ICP & Pain Database".
-2. Query its rows: `curl -s -X POST https://api.notion.com/v1/databases/<id>/query -H "Authorization: Bearer $NOTION_API_KEY" -H "Notion-Version: 2022-06-28"`.
-3. Use the REAL Pain Name + User Quote + Emotional Trigger + Poker Spot + ICP Segment, prioritizing rows with high **Content Potential**.
-Ground the ideas in THESE real pains/quotes — not invented ones. If Notion is unreachable, say so and fall back to brand-kit pains.
+Before inventing anything, pull real player pains from the **ICP & Pain Database** in Notion: use the **notion** skill via the **terminal** tool (run skill_view notion for the exact call) to query that database's rows. Use the REAL Pain Name + User Quote + Emotional Trigger + Poker Spot + ICP Segment, prioritizing high **Content Potential**. Ground ideas in THESE real pains — not invented ones. If Notion is unreachable, say so and fall back to brand-kit.
 
 > SUPREME RULE: write from the PLAYER's seat. If only the company would care -> cut it.
 
