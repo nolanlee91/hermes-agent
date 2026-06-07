@@ -16,11 +16,16 @@ KB="$DATA/mpm"
 echo "Seeding MicroPokerMaster brain into: $DATA"
 mkdir -p "$KB/knowledge" "$KB/prompts" "$KB/insights" "$KB/content" "$KB/landing-page" "$KB/competitors" "$KB/docs"
 
-# ── config.yaml (Gemini) ──────────────────────────────────────────────
+# ── config.yaml (Gemini + Notion env passthrough to tools) ────────────
 cat > "$DATA/config.yaml" <<'MPMEOF'
 model:
   provider: "gemini"
   default: "gemini-2.5-flash"
+terminal:
+  # Pass these secrets through to tool subprocesses (curl) — Hermes strips
+  # secrets from the sandbox by default. Needed so the Notion skill can auth.
+  env_passthrough:
+    - NOTION_API_KEY
 MPMEOF
 
 # ── SOUL.md (identity, auto-load; mpm/-prefixed paths) ────────────────
