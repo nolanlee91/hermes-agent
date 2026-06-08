@@ -167,38 +167,46 @@ cat > "$KB/prompts/ideas.md" <<'MPMEOF'
 Generate content ideas for the founder to pick and write. (Read knowledge/brand-kit.md first.)
 
 ## STEP 0 — Ground in real data from Notion (do this FIRST)
-Before inventing anything, pull real player pains from the **ICP & Pain Database** in Notion: use the **notion** skill via the **terminal** tool (run skill_view notion for the exact call) to query that database's rows. Use the REAL Pain Name + User Quote + Emotional Trigger + Poker Spot + ICP Segment, prioritizing high **Content Potential**. Ground ideas in THESE real pains — not invented ones. If Notion is unreachable, say so and fall back to brand-kit.
+Run this ONE fixed command via the terminal tool — do NOT hand-build a Notion query:
+    python mpm/scripts/list_pains.py
+It prints ALL ~17 real player pains from the ICP & Pain Database, sorted by Content Potential (high first; blank scores still listed), each line starting with [id=...]. Build each idea from a REAL row — use its Pain Name + quote + Emotional Trigger + Poker Spot + ICP Segment, and keep its id for --pain-id when saving. Use as many different real pains as you have ideas; do NOT invent pains that aren't in the list. ONLY if the command prints ERROR, say so and fall back to brand-kit.
 
 > SUPREME RULE: write from the PLAYER's seat. If only the company would care -> cut it.
 
 ## Player's 4 questions (mandatory lens — see brand-kit)
-Each idea must hit one: Am I a winner? · Improving or just volume? · What's quietly costing me money? · Will I go broke? None -> cut.
+Each idea must hit one: Am I a winner? - Improving or just volume? - What's quietly costing me money? - Will I go broke? None -> cut.
 
 ## 80/20
->=8/10 ideas are Pain/Mistake/Story/Contrarian; <=2 about MPM (still tied to a player benefit).
+At least 8 of 10 ideas are Pain/Mistake/Story/Contrarian; at most 2 about MPM (still tied to a player benefit).
 
 ## 4 idea types
 - PAIN — results-oriented thinking, hidden leaks, tilt, no study system, bankroll stress, "am I really winning?".
-- MISTAKE — "3 mistakes…", "5 signs you're a losing reg…", "7 things nobody tells you about live cash".
-- STORY — "A $2/$5 grinder kept losing from the blinds…" (anonymous; [founder fills in real detail]).
+- MISTAKE — "3 mistakes...", "5 signs you're a losing reg...", "7 things nobody tells you about live cash".
+- STORY — a grinder kept losing from the blinds... (anonymous; [founder fills in real detail]).
 - CONTRARIAN — against common belief. e.g. "More hours won't make you better. Reviewing 5 hands will."
 
-## Topics (rotate, >=4 per run, not all 'leaks')
-Study habits/leaks · Bankroll/tilt/variance · Live cash specifics · Strategy spots (teach, don't lecture) · Mindset/improvement · Content/vlogging · (<=20%) MPM behind-the-scenes.
+## Topics (rotate, at least 4 per run, not all 'leaks')
+Study habits/leaks - Bankroll/tilt/variance - Live cash specifics - Strategy spots (teach) - Mindset/improvement - Content/vlogging - (max 20%) MPM behind-the-scenes.
 
-## Output (each idea = 4 fields)
-N. [TYPE · Topic] HOOK (player's voice)
-   Pain: the specific player pain
+## Output (each idea = 4 fields, KEEP IT SHORT)
+N. [TYPE - Topic] HOOK (player's voice)
+   Pain: the specific player pain (from the real row)
    Format: X / Short-form video / Reddit
    Why they care: which of the 4 questions it hits
+   (pain id: <the [id=...] of the row this came from>)
 
 ## Quality
+- **Write every idea in ENGLISH** — title, hook, pain summary (audience is English-speaking). You may add a one-line Vietnamese note to the founder, but the ideas themselves are English.
 - Hook in player's voice, no internal jargon. Never fabricate numbers -> [founder fills in].
-- Default 10 ideas; "ideas bankroll" focuses a topic but still 4 types.
+- Output ALL requested ideas in ONE message — do NOT split into parts or say "wait a moment".
+- Default 10 ideas; "5 ideas" or "ideas bankroll" adjusts count/topic but still mixes the 4 types.
 - End: "Type write N to turn an idea into posts, or 'save N' to push it into Notion as a Draft." (no leading slash)
 
 ## Save back to Notion (write-back)
-When the founder says "save N" (or asks to save ideas), write each chosen idea into the Content Ideas Database as a Draft using `python mpm/scripts/save_idea.py` (see SOUL "Saving content back into Notion"). Map: --title (a clear idea title), --hook, --format, --angle, --pillar, --hand, --hero, --decision, and --pain-id (the id of the source ICP & Pain row this idea came from, to link Related Pain). Status stays Draft for founder review — never auto-post.
+When the founder says "save N", write each chosen idea into the Content Ideas Database as a Draft using `python mpm/scripts/save_idea.py`. --title MUST be a real descriptive English headline (e.g. "Auto-Pilot Poker: The Leak Quietly Costing You Half Your Session") — NOT the "[TYPE - Topic]" label. --hook is English too. For a real, proven hook, first run `python mpm/scripts/list_hooks.py --pain-id <the idea's pain id>` (if 0, run with no filter and pick by topic) and use that hook's wording for --hook. Map: --title, --hook, --format (ONE value), --angle, --pillar, --hand, --hero, --decision, and --pain-id (the id from the pain row this idea came from). Status stays Draft for founder review — never auto-post.
+
+## Notion rule (hard)
+All Notion access goes ONLY through the helper scripts (list_pains / list_hooks / save_idea / save_content). NEVER hand-build curl, a PATCH, or execute_code for Notion. We never UPDATE an existing row — to redo one, tell the founder; create a fresh row.
 MPMEOF
 
 # ── prompts/write.md ──────────────────────────────────────────────────
@@ -211,21 +219,43 @@ From one idea (number from ideas, or a description), write a post in 3 versions:
 - write 3 -> write idea #3 from the latest ideas list.
 - write <description> -> from a free description.
 
-## Output: 3 versions
+## STEP 1 — Choose the hook TOGETHER (founder decides; never auto-pick)
+Do this BEFORE writing. Run `python mpm/scripts/list_hooks.py --pain-id <the idea's pain id>`. If it prints 0, run `python mpm/scripts/list_hooks.py` with NO filter and scan for any topically relevant hooks. Then PRESENT a short menu — do NOT silently choose:
+```
+Hook for this post — pick one:
+  A) [your library] <real hook text>        (id=...)
+  B) [your library] <real hook text>        (id=...)
+  C) [new suggestion] <a hook you write>
+Reply A/B/C, or write your own.
+```
+Show 1-3 fitting library hooks + 1-2 of your own suggestions. IMPORTANT: none are "proven" — the Performance column is empty — so do NOT claim the library one is better; just lay out the options. Then WAIT for the founder's pick before writing. If the founder hasn't picked, ask once; don't start writing.
+Once chosen: a library hook -> keep its `[id=...]` for `--hook-id` when saving; a new/founder-written hook -> no hook id.
+
+## STEP 2 — Write the 3 versions (open every one with the CHOSEN hook)
 ### X / TWITTER (poker-Twitter voice)
-Single strong post or short thread (2–5). First line = hook. Teach something real. No link in main post. Plain grinder voice, sparing emoji.
+Single strong post or short thread (2–5). First line = the chosen hook. Teach something real. No link in main post. Plain grinder voice, sparing emoji.
 ### SHORT-FORM VIDEO SCRIPT (30–45s)
-3-second hook. 4–6 beats (spoken line + on-screen text / b-roll). Vertical-first. Close + soft CTA.
+3-second hook (the chosen one). 4–6 beats (spoken line + on-screen text / b-roll). Vertical-first. Close + soft CTA.
 ### REDDIT (r/poker, r/livepoker — value-first)
 150–300 words. Genuinely useful post / honest story. Lead with insight, not product; mention MPM once, low-key. Plain text, invites discussion.
 
 ## Save the written content to Notion (Production Pipeline) — when founder confirms
-After the founder is happy with a version, save it as a Draft in the **Production Pipeline** via terminal:
-`python mpm/scripts/save_content.py --title "..." --script "<full post text>" [--caption ...] [--hashtags ...] [--platform X,Reddit] [--voice ...] [--source-idea <Content Ideas row id, if the brief was saved>] [--pain-id <ICP row id>]`
+After the founder is happy with a version, save it as a Draft in the **Production Pipeline** via terminal (--title is a real descriptive English headline, NOT the "[TYPE - Topic]" label; always pass --source-idea so the content links back to its brief):
+`python mpm/scripts/save_content.py --title "..." --script "<full post text>" [--caption ...] [--hashtags ...] [--platform X,Reddit] [--voice ...] [--hero-hand "Ac 8d"] [--villain-hand "Ah Ts"] [--board "As 9h 4d"] [--source-idea <Content Ideas row id, if the brief was saved>] [--pain-id <ICP row id>] [--hook-id <Hook Library row id used>]`
+If the video script centers on a concrete hand, ALSO pass the cards as standard codes (rank + suit s/h/d/c) so the local video renderer auto-draws the board + hands: --hero-hand (your two cards), --board (the flop/turn/river), and --villain-hand only for a vs/domination spot. Omit them for non-hand content. NEVER invent cards the script doesn't state.
 Status stays "Draft Generated" for founder review. NEVER auto-post. Only save when the founder asks (e.g. "save this" / "save to pipeline").
 
+## Save a good hook back to the Hook Library (when founder asks)
+If the founder likes a hook and says "save this hook" / "lưu hook này" (works for a hook you suggested OR one they wrote), add it to the library so it's reusable next time:
+`python mpm/scripts/save_hook.py --hook "<the exact hook text>" --pain-id <the idea's pain id> [--platform X] [--type Curiosity,Money Pain]`
+Hook Type options: Relatable, Identity, AI Shock, Meme, Shock, Ego, Curiosity, Money Pain. Leave Performance empty (filled later from real results). This is how the library grows from founder-approved hooks.
+
+## Notion rule (hard)
+All Notion writes go ONLY through the helper scripts (list_pains / list_hooks / save_idea / save_content / save_hook). NEVER hand-build curl, a PATCH, or execute_code for Notion. We never UPDATE an existing row — to redo one, tell the founder; create a fresh row instead.
+
 ## Rules
-- English, real grinder, peer-to-peer. Never fabricate numbers -> [founder fills in].
+- **Everything is written in ENGLISH** (audience is English-speaking) — title, script, caption, hashtags, hook. You may add a one-line Vietnamese note to the founder, but the content itself is English.
+- Real grinder, peer-to-peer. Never fabricate numbers -> [founder fills in].
 - Value-first; mention MPM second and lightly. Stay on study > volume; no "win easy money".
 - No income guarantees (poker is gambling). Each version genuinely different.
 - End: "Want a different tone/length, save this to the pipeline, or write another idea?"
@@ -301,7 +331,7 @@ def main():
         if v: props[name] = {"rich_text": [{"text": {"content": v}}]}
     for arg,name in SELECTS.items():
         v = getattr(a, arg)
-        if v: props[name] = {"select": {"name": v}}
+        if v: props[name] = {"select": {"name": v.split("/")[0].split(",")[0].strip()}}
     if a.pain_id: props["Related Pain"] = {"relation": [{"id": a.pain_id}]}
     body = json.dumps({"parent":{"database_id":DB_ID},"properties":props}).encode()
     req = urllib.request.Request("https://api.notion.com/v1/pages", data=body, method="POST",
@@ -325,12 +355,21 @@ DB_ID = "c3513c12-61f7-41d3-bebd-b8b9ff5583a0"  # Production Pipeline
 NOTION_VERSION = "2022-06-28"
 SELECTS = {"voice":"Voice Style","visual":"Visual Style","subtitle":"Subtitle Style",
            "decision":"Final Decision","status":"Status"}
-TEXTS = {"script":"Script","caption":"Caption","hashtags":"Hashtags"}
-RELATIONS = {"source_idea":"Source Idea","pain_id":"ICP & Pain Database","hook_id":"Hook Library"}
+TEXTS = {"script":"Script","caption":"Caption","hashtags":"Hashtags",
+         "hero_hand":"Hero Hand","villain_hand":"Villain Hand","board":"Board Runout"}
+# arg -> keyword to find the relation property by (Production Pipeline names carry
+# emoji prefixes like "📋 ICP & Pain Database", so resolve by substring at runtime)
+RELATION_KEYS = {"source_idea":"source idea","pain_id":"icp & pain","hook_id":"hook library"}
+def api(method,url,key,body=None):
+    req = urllib.request.Request(url, data=body, method=method,
+        headers={"Authorization":f"Bearer {key}","Notion-Version":NOTION_VERSION,"Content-Type":"application/json"})
+    with urllib.request.urlopen(req, timeout=20) as r: return json.load(r)
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--title", required=True)
-    for f in ["script","caption","hashtags","platform","voice","visual","subtitle","decision"]:
+    # hero-hand/villain-hand/board -> card codes ("As 8d"); local renderer auto-draws them
+    for f in ["script","caption","hashtags","platform","voice","visual","subtitle","decision",
+              "hero-hand","villain-hand","board"]:
         ap.add_argument("--"+f)
     ap.add_argument("--status", default="Draft Generated")
     ap.add_argument("--source-idea", dest="source_idea")
@@ -340,18 +379,182 @@ def main():
     key = os.environ.get("NOTION_API_KEY") or os.environ.get("NOTION_API_TOKEN")
     if not key:
         print("ERROR: NOTION_API_KEY not in environment", file=sys.stderr); sys.exit(2)
+    rel_names = {}
+    try:
+        schema = api("GET", f"https://api.notion.com/v1/databases/{DB_ID}", key)
+        for arg,kw in RELATION_KEYS.items():
+            for name,meta in schema["properties"].items():
+                if meta["type"]=="relation" and kw in name.lower(): rel_names[arg]=name; break
+    except urllib.error.HTTPError as e:
+        print("ERROR", e.code, e.read().decode()[:400], file=sys.stderr); sys.exit(1)
     props = {"Content Name": {"title": [{"text": {"content": a.title}}]}}
     for arg,name in TEXTS.items():
         v = getattr(a, arg)
         if v: props[name] = {"rich_text": [{"text": {"content": v}}]}
     for arg,name in SELECTS.items():
         v = getattr(a, arg)
-        if v: props[name] = {"select": {"name": v}}
+        if v: props[name] = {"select": {"name": v.split("/")[0].split(",")[0].strip()}}
     if a.platform:
         props["Platform"] = {"multi_select": [{"name": p.strip()} for p in a.platform.split(",") if p.strip()]}
-    for arg,name in RELATIONS.items():
-        v = getattr(a, arg)
-        if v: props[name] = {"relation": [{"id": v}]}
+    for arg in RELATION_KEYS:
+        v = getattr(a, arg); name = rel_names.get(arg)
+        if v and name: props[name] = {"relation": [{"id": v}]}
+    body = json.dumps({"parent":{"database_id":DB_ID},"properties":props}).encode()
+    try:
+        d = api("POST", "https://api.notion.com/v1/pages", key, body)
+        print("OK id=" + d["id"] + " url=" + (d.get("url") or ""))
+    except urllib.error.HTTPError as e:
+        print("ERROR", e.code, e.read().decode()[:400], file=sys.stderr); sys.exit(1)
+if __name__ == "__main__": main()
+MPMEOF
+
+# ── scripts/list_pains.py (stage 1: read ICP & Pain DB -> ground ideas) ──
+cat > "$KB/scripts/list_pains.py" <<'MPMEOF'
+#!/usr/bin/env python3
+"""list_pains.py — read ALL rows of the MPM ICP & Pain Database (Notion).
+Stage 1: ground `ideas` in REAL pains. Agent runs this one fixed command and
+reads clean text instead of hand-building a Notion query (which Flash fumbles).
+Sorted by Content Potential (high first; blank still listed). Each line carries
+the row id for save_idea.py --pain-id.  Usage: list_pains.py [--top N]"""
+import argparse, json, os, sys, urllib.request, urllib.error
+DB_ID = "c5e45bc4-4f13-41c5-a59e-e001a49071c3"  # ICP & Pain Database
+NOTION_VERSION = "2022-06-28"
+def txt(prop):
+    t = prop["type"]
+    if t == "title":     return "".join(x["plain_text"] for x in prop["title"])
+    if t == "rich_text": return "".join(x["plain_text"] for x in prop["rich_text"])
+    if t == "select":    return prop["select"]["name"] if prop["select"] else ""
+    if t == "number":    return prop["number"]
+    return ""
+def main():
+    ap = argparse.ArgumentParser(); ap.add_argument("--top", type=int, default=0)
+    a = ap.parse_args()
+    key = os.environ.get("NOTION_API_KEY") or os.environ.get("NOTION_API_TOKEN")
+    if not key:
+        print("ERROR: NOTION_API_KEY not in environment", file=sys.stderr); sys.exit(2)
+    body = json.dumps({"page_size": 100}).encode()
+    req = urllib.request.Request(f"https://api.notion.com/v1/databases/{DB_ID}/query",
+        data=body, method="POST",
+        headers={"Authorization": f"Bearer {key}", "Notion-Version": NOTION_VERSION,
+                 "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r: d = json.load(r)
+    except urllib.error.HTTPError as e:
+        print("ERROR", e.code, e.read().decode()[:400], file=sys.stderr); sys.exit(1)
+    rows = []
+    for r in d.get("results", []):
+        p = r["properties"]
+        rows.append({"id": r["id"],
+            "name": txt(p.get("Pain Name", {"type":"title","title":[]})) or "(untitled)",
+            "cp": txt(p.get("Content Potential", {"type":"number","number":None})),
+            "seg": txt(p.get("ICP Segment", {"type":"select","select":None})),
+            "trig": txt(p.get("Emotional Trigger", {"type":"select","select":None})),
+            "spot": txt(p.get("Poker Spot", {"type":"select","select":None})),
+            "quote": txt(p.get("User Quote", {"type":"rich_text","rich_text":[]}))})
+    rows.sort(key=lambda x: (x["cp"] is None, -(x["cp"] or 0)))
+    if a.top > 0: rows = rows[:a.top]
+    print(f"# {len(rows)} pains from ICP & Pain Database (Content Potential high->low)\n")
+    for x in rows:
+        cp = x["cp"] if x["cp"] is not None else "-"
+        print(f"[id={x['id']}] CP={cp} | {x['name']}")
+        meta = " | ".join(f"{k}={v}" for k, v in
+            (("seg",x["seg"]),("trigger",x["trig"]),("spot",x["spot"])) if v)
+        if meta: print(f"    {meta}")
+        if x["quote"]: print(f"    quote: \"{x['quote']}\"")
+        print()
+if __name__ == "__main__": main()
+MPMEOF
+
+# ── scripts/list_hooks.py (read Hook Library -> proven English hooks) ──
+cat > "$KB/scripts/list_hooks.py" <<'MPMEOF'
+#!/usr/bin/env python3
+"""list_hooks.py — read the MPM Hook Library (Notion), proven English hooks.
+Agent runs this one fixed command (never hand-builds a Notion query). Sorted by
+Performance (high first; blank last). --pain-id filters to hooks linked to that
+pain via Related Pain. Each line carries the hook id for save_content --hook-id.
+Usage: list_hooks.py [--pain-id <ICP row>] [--top N]"""
+import argparse, json, os, sys, urllib.request, urllib.error
+DB_ID = "358a5a3f-fec6-80a6-b912-f714680f4622"  # Hook Library
+NOTION_VERSION = "2022-06-28"
+def txt(prop):
+    t = prop["type"]
+    if t == "title":        return "".join(x["plain_text"] for x in prop["title"])
+    if t == "rich_text":    return "".join(x["plain_text"] for x in prop["rich_text"])
+    if t == "select":       return prop["select"]["name"] if prop["select"] else ""
+    if t == "multi_select": return "/".join(o["name"] for o in prop["multi_select"])
+    if t == "number":       return prop["number"]
+    if t == "relation":     return [r["id"] for r in prop["relation"]]
+    return ""
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--pain-id", dest="pain_id"); ap.add_argument("--top", type=int, default=0)
+    a = ap.parse_args()
+    key = os.environ.get("NOTION_API_KEY") or os.environ.get("NOTION_API_TOKEN")
+    if not key:
+        print("ERROR: NOTION_API_KEY not in environment", file=sys.stderr); sys.exit(2)
+    body = json.dumps({"page_size": 100}).encode()
+    req = urllib.request.Request(f"https://api.notion.com/v1/databases/{DB_ID}/query",
+        data=body, method="POST",
+        headers={"Authorization": f"Bearer {key}", "Notion-Version": NOTION_VERSION,
+                 "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r: d = json.load(r)
+    except urllib.error.HTTPError as e:
+        print("ERROR", e.code, e.read().decode()[:400], file=sys.stderr); sys.exit(1)
+    rows = []
+    for r in d.get("results", []):
+        p = r["properties"]
+        hook = txt(p.get("Hook", {"type":"title","title":[]}))
+        if not hook: continue
+        rows.append({"id": r["id"], "hook": hook,
+            "perf": txt(p.get("Performance", {"type":"number","number":None})),
+            "plat": txt(p.get("Platform", {"type":"select","select":None})),
+            "type": txt(p.get("Hook Type", {"type":"multi_select","multi_select":[]})),
+            "pains": txt(p.get("Related Pain", {"type":"relation","relation":[]}))})
+    if a.pain_id:
+        pid = a.pain_id.replace("-", "")
+        rows = [x for x in rows if any(pid == rid.replace("-", "") for rid in x["pains"])]
+    rows.sort(key=lambda x: (x["perf"] is None, -(x["perf"] or 0)))
+    if a.top > 0: rows = rows[:a.top]
+    scope = f" linked to pain {a.pain_id}" if a.pain_id else ""
+    print(f"# {len(rows)} hooks from Hook Library{scope} (Performance high->low)\n")
+    for x in rows:
+        perf = x["perf"] if x["perf"] is not None else "-"
+        tags = " ".join(f"[{t}]" for t in (x["plat"], x["type"]) if t)
+        print(f"[id={x['id']}] Perf={perf} {tags}")
+        print(f"    {x['hook']}")
+        print()
+if __name__ == "__main__": main()
+MPMEOF
+
+# ── scripts/save_hook.py (add a chosen hook back into the Hook Library) ──
+cat > "$KB/scripts/save_hook.py" <<'MPMEOF'
+#!/usr/bin/env python3
+"""save_hook.py — add one hook to the MPM Hook Library (Notion).
+Closes the loop: when the founder likes a hook (agent-suggested or their own),
+save it so it becomes a reusable option next time and can gather Performance data.
+Links Related Pain so list_hooks --pain-id finds it later. Only --hook required.
+Usage: save_hook.py --hook "..." [--pain-id <ICP row>] [--platform X]
+       [--type Curiosity,Money Pain] [--performance 0] [--notes "..."] [--reusable true]"""
+import argparse, json, os, sys, urllib.request, urllib.error
+DB_ID = "358a5a3f-fec6-80a6-b912-f714680f4622"  # Hook Library
+NOTION_VERSION = "2022-06-28"
+def main():
+    ap = argparse.ArgumentParser(); ap.add_argument("--hook", required=True)
+    ap.add_argument("--pain-id", dest="pain_id"); ap.add_argument("--platform")
+    ap.add_argument("--type"); ap.add_argument("--performance", type=float)
+    ap.add_argument("--notes"); ap.add_argument("--reusable", default="true")
+    a = ap.parse_args()
+    key = os.environ.get("NOTION_API_KEY") or os.environ.get("NOTION_API_TOKEN")
+    if not key:
+        print("ERROR: NOTION_API_KEY not in environment", file=sys.stderr); sys.exit(2)
+    props = {"Hook": {"title": [{"text": {"content": a.hook}}]},
+             "Reusable": {"checkbox": str(a.reusable).strip().lower() in ("true","1","yes","y")}}
+    if a.platform: props["Platform"] = {"select": {"name": a.platform.split("/")[0].split(",")[0].strip()}}
+    if a.type: props["Hook Type"] = {"multi_select": [{"name": t.strip()} for t in a.type.split(",") if t.strip()]}
+    if a.performance is not None: props["Performance"] = {"number": a.performance}
+    if a.notes: props["Notes"] = {"rich_text": [{"text": {"content": a.notes}}]}
+    if a.pain_id: props["Related Pain"] = {"relation": [{"id": a.pain_id}]}
     body = json.dumps({"parent":{"database_id":DB_ID},"properties":props}).encode()
     req = urllib.request.Request("https://api.notion.com/v1/pages", data=body, method="POST",
         headers={"Authorization":f"Bearer {key}","Notion-Version":NOTION_VERSION,"Content-Type":"application/json"})
