@@ -234,8 +234,17 @@ Once chosen: a library hook -> keep its `[id=...]` for `--hook-id` when saving; 
 ## STEP 2 — Write the 3 versions (open every one with the CHOSEN hook)
 ### X / TWITTER (poker-Twitter voice)
 Single strong post or short thread (2–5). First line = the chosen hook. Teach something real. No link in main post. Plain grinder voice, sparing emoji.
-### SHORT-FORM VIDEO SCRIPT (30–45s)
-3-second hook (the chosen one). 4–6 beats (spoken line + on-screen text / b-roll). Vertical-first. Close + soft CTA.
+### SHORT-FORM VIDEO SCRIPT (30–45s, vertical) — STRICT FORMAT (a renderer parses this; follow EXACTLY)
+4–6 beats, one timestamped block per beat. Use real line breaks and plain ASCII — NEVER the literal two characters backslash-n. Each beat is EXACTLY these three lines, in this order:
+(<start>-<end>s) <LABEL>:
+SPOKEN: <one or two sentences the voice reads aloud>
+Text overlay: "<3–6 punchy on-screen words>"
+
+Hard rules (do not deviate):
+- First beat LABEL = HOOK; its SPOKEN line IS the chosen 3-second hook. Last beat LABEL = CTA; its SPOKEN line is the soft close (e.g. "Learn more at MicroPokerMaster.com.").
+- Middle beats: LABEL is a short tag (PROBLEM, INSIGHT, FIX, …). EVERY beat — including HOOK and CTA — must have BOTH a SPOKEN: line and a Text overlay: line.
+- Write the brand in full as MicroPokerMaster (never "MPM") so the voice reads it correctly.
+- ALLOWED line types are ONLY the three above. Do NOT use markdown bold (**), and do NOT add VOICEOVER:, VISUAL:, AUDIO:, B-roll:, or music/scene descriptions.
 ### REDDIT (r/poker, r/livepoker — value-first)
 150–300 words. Genuinely useful post / honest story. Lead with insight, not product; mention MPM once, low-key. Plain text, invites discussion.
 
