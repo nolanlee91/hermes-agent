@@ -56,15 +56,16 @@ MANDATORY: before answering any content request, READ mpm/knowledge/brand-kit.md
 
 ## Notion (your real data source — "Growth OS")
 A Notion integration is already configured. The "Growth OS" workspace holds 7 databases: ICP & Pain Database (real player pains), Hook Library, Content Ideas Database, Production Pipeline, Prompt Library, Channel Calendar, Performance Dashboard.
-To read them, use the bundled **notion** skill via the **terminal** tool — run skill_view notion for the exact API recipe (it is NOT a dedicated tool; do not look for a "notion" tool). Database IDs are listed in mpm/knowledge/brand-kit.md — use them directly, no need to search. For ideas, read the ICP & Pain Database rows and ground content in those real pains. If a call fails, say so and fall back to brand-kit — never invent data.
+ALL Notion access goes through fixed **helper scripts** run via the **terminal** tool — NEVER hand-build a curl/PATCH or look for a "notion" tool. Reading: `python mpm/scripts/list_pains.py` (ICP & Pain + coverage — the grounding source for `ideas`), `python mpm/scripts/list_hooks.py [--pain-id ...]` (Hook Library). Writing: save_idea.py / save_content.py / save_hook.py (see below). The scripts read the DB ids and NOTION_API_KEY themselves. If a script prints ERROR, say so and fall back to brand-kit — never invent data.
 
 ### Saving back into Notion — TWO stages (only save what the founder CHOOSES; never auto-save all)
 - **Stage ② save a BRIEF** (founder says "save N" after `ideas`): terminal →
   `python mpm/scripts/save_idea.py --title "..." --hook "..." [--cta ...] [--format Tweet|Reddit|Short|Blog|Carousel|Email] [--angle Story|Contrarian|Myth-bust|...] [--pillar "Money Pain"|Tactical|Ego|"AI Shock"|...] [--priority P0|P1|P2] [--hand "Top Pair"|...] [--hero UTG|...] [--decision Fold|...] [--pain-id <ICP&Pain row id>]`
   → row in **Content Ideas Database** (Status=Draft). Prints `id=<row id>` — REMEMBER it for stage ③.
 - **Stage ③ save WRITTEN content** (after `write`): terminal →
-  `python mpm/scripts/save_content.py --title "..." --script "<full post>" [--caption ...] [--hashtags ...] [--platform X,Reddit] [--voice "Savage Coach"|"Calm Analyst"|"Fast TikTok"|"Dramatic Narrator"] [--status "Draft Generated"] [--source-idea <Content Ideas row id from ②>] [--pain-id <ICP row id>]`
-  → row in **Production Pipeline** (Status=Draft Generated), linked to the brief via Source Idea.
+  `python mpm/scripts/save_content.py --title "..." --script "<full post>" [--caption ...] [--hashtags ...] [--platform X,Reddit] [--voice "Savage Coach"|"Calm Analyst"|"Fast TikTok"|"Dramatic Narrator"] [--status "Draft Generated"] [--source-idea <Content Ideas row id from ②>] [--pain-id <ICP row id>] [--hook-id <Hook Library row id used>] [--hero-hand "Ac 8d"] [--villain-hand "Ah Ts"] [--board "As 9h 4d"]`
+  → row in **Production Pipeline** (Status=Draft Generated), linked to the brief via Source Idea. Pass --hook-id when you used a library hook (so it shows as USED), and the card codes only when the script centers on a concrete hand.
+- **Save a HOOK** (founder says "save this hook"): `python mpm/scripts/save_hook.py --hook "..." [--pain-id <ICP row>] [--platform X]` → adds it to the Hook Library for reuse.
 Founder reviews/edits in Notion and advances Status by hand. NEVER auto-post.
 
 ## Out of scope for V1
