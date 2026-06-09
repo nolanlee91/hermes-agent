@@ -169,7 +169,12 @@ Generate content ideas for the founder to pick and write. (Read knowledge/brand-
 ## STEP 0 — Ground in real data from Notion (do this FIRST)
 Run this ONE fixed command via the terminal tool — do NOT hand-build a Notion query:
     python mpm/scripts/list_pains.py
-It prints ALL ~17 real player pains from the ICP & Pain Database, sorted by Content Potential (high first; blank scores still listed), each line starting with [id=...]. Build each idea from a REAL row — use its Pain Name + quote + Emotional Trigger + Poker Spot + ICP Segment, and keep its id for --pain-id when saving. Use as many different real pains as you have ideas; do NOT invent pains that aren't in the list. ONLY if the command prints ERROR, say so and fall back to brand-kit.
+It prints the ~17 real player pains from the ICP & Pain Database, LEAST-COVERED FIRST, each line starting with [id=...]. Per pain it shows COVERAGE: `ideas=` and `posts=` already made, `hooks=N(M used)`, plus the `made:` titles for any pain already covered. Build each idea from a REAL row — use its Pain Name + quote + Emotional Trigger + Poker Spot + ICP Segment, and keep its id for --pain-id when saving.
+Coverage rules (so you don't repeat yourself across sessions):
+- Prefer pains tagged `<- FRESH` (used=0); spread ideas across DIFFERENT pains, as many as you have ideas.
+- If you reuse a pain that already has work (its `made:` titles are shown), you MUST take a clearly DIFFERENT angle from those — never re-pitch one already made.
+- Skip pains tagged `** HEAVILY USED` unless the founder asks for that topic.
+- do NOT invent pains that aren't in the list. ONLY if the command prints ERROR, say so and fall back to brand-kit.
 
 > SUPREME RULE: write from the PLAYER's seat. If only the company would care -> cut it.
 
@@ -228,7 +233,7 @@ Hook for this post — pick one:
   C) [new suggestion] <a hook you write>
 Reply A/B/C, or write your own.
 ```
-Show 1-3 fitting library hooks + 1-2 of your own suggestions. IMPORTANT: none are "proven" — the Performance column is empty — so do NOT claim the library one is better; just lay out the options. Then WAIT for the founder's pick before writing. If the founder hasn't picked, ask once; don't start writing.
+Show 1-3 fitting library hooks + 1-2 of your own suggestions. IMPORTANT: none are "proven" — the Performance column is empty — so do NOT claim the library one is better; just lay out the options. Exclude hooks tagged `*** USED` (already used in a post) — only surface one if nothing else fits, and flag it as already-used. Then WAIT for the founder's pick before writing. If the founder hasn't picked, ask once; don't start writing.
 Once chosen: a library hook -> keep its `[id=...]` for `--hook-id` when saving; a new/founder-written hook -> no hook id.
 
 ## STEP 2 — Write the 3 versions (open every one with the CHOSEN hook)
@@ -420,13 +425,18 @@ MPMEOF
 # ── scripts/list_pains.py (stage 1: read ICP & Pain DB -> ground ideas) ──
 cat > "$KB/scripts/list_pains.py" <<'MPMEOF'
 #!/usr/bin/env python3
-"""list_pains.py — read ALL rows of the MPM ICP & Pain Database (Notion).
-Stage 1: ground `ideas` in REAL pains. Agent runs this one fixed command and
-reads clean text instead of hand-building a Notion query (which Flash fumbles).
-Sorted by Content Potential (high first; blank still listed). Each line carries
-the row id for save_idea.py --pain-id.  Usage: list_pains.py [--top N]"""
+"""list_pains.py — read the MPM ICP & Pain Database (Notion) WITH coverage.
+Stage 1: ground `ideas` in REAL pains AND show how much each pain is already
+covered, so the agent stops repeating the same pain. Per pain it shows:
+  ideas = rows in Content Ideas linked to it | posts = rows in Production
+  Pipeline linked to it | hooks = N(M used) library hooks (M already used in a
+  written post). LEAST-COVERED pains float to the top. Each line carries the
+  row id for save_idea.py --pain-id.  Usage: list_pains.py [--top N]"""
 import argparse, json, os, sys, urllib.request, urllib.error
-DB_ID = "c5e45bc4-4f13-41c5-a59e-e001a49071c3"  # ICP & Pain Database
+PAIN_DB  = "c5e45bc4-4f13-41c5-a59e-e001a49071c3"  # ICP & Pain
+IDEAS_DB = "b019a5fc-369b-4203-bc7d-7675f564586f"  # Content Ideas
+PIPE_DB  = "c3513c12-61f7-41d3-bebd-b8b9ff5583a0"  # Production Pipeline
+HOOK_DB  = "358a5a3f-fec6-80a6-b912-f714680f4622"  # Hook Library
 NOTION_VERSION = "2022-06-28"
 def txt(prop):
     t = prop["type"]
@@ -435,41 +445,86 @@ def txt(prop):
     if t == "select":    return prop["select"]["name"] if prop["select"] else ""
     if t == "number":    return prop["number"]
     return ""
+def norm(i): return (i or "").replace("-", "")
+def title_of(props):
+    for p in props.values():
+        if p.get("type") == "title":
+            return "".join(x["plain_text"] for x in p["title"]) or "(untitled)"
+    return "(untitled)"
+def rel_ids(props, keyword):
+    for name, p in props.items():
+        if p.get("type") == "relation" and keyword in name.lower():
+            return [r["id"] for r in p["relation"]]
+    return []
+def fetch_all(key, db):
+    out, cursor = [], None
+    while True:
+        payload = {"page_size": 100}
+        if cursor: payload["start_cursor"] = cursor
+        req = urllib.request.Request(f"https://api.notion.com/v1/databases/{db}/query",
+            data=json.dumps(payload).encode(), method="POST",
+            headers={"Authorization": f"Bearer {key}", "Notion-Version": NOTION_VERSION,
+                     "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=20) as r: d = json.load(r)
+        out += d.get("results", [])
+        if not d.get("has_more"): break
+        cursor = d.get("next_cursor")
+    return out
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--top", type=int, default=0)
     a = ap.parse_args()
     key = os.environ.get("NOTION_API_KEY") or os.environ.get("NOTION_API_TOKEN")
     if not key:
         print("ERROR: NOTION_API_KEY not in environment", file=sys.stderr); sys.exit(2)
-    body = json.dumps({"page_size": 100}).encode()
-    req = urllib.request.Request(f"https://api.notion.com/v1/databases/{DB_ID}/query",
-        data=body, method="POST",
-        headers={"Authorization": f"Bearer {key}", "Notion-Version": NOTION_VERSION,
-                 "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=20) as r: d = json.load(r)
+        pains = fetch_all(key, PAIN_DB); ideas = fetch_all(key, IDEAS_DB)
+        posts = fetch_all(key, PIPE_DB); hooks = fetch_all(key, HOOK_DB)
     except urllib.error.HTTPError as e:
         print("ERROR", e.code, e.read().decode()[:400], file=sys.stderr); sys.exit(1)
+    ideas_by, posts_by, burned = {}, {}, set()
+    for row in ideas:
+        for pid in rel_ids(row["properties"], "pain"):
+            ideas_by.setdefault(norm(pid), []).append(title_of(row["properties"]))
+    for row in posts:
+        pr = row["properties"]
+        for pid in rel_ids(pr, "pain"): posts_by.setdefault(norm(pid), []).append(title_of(pr))
+        for hid in rel_ids(pr, "hook"): burned.add(norm(hid))
+    hooks_by = {}
+    for row in hooks:
+        hid = norm(row["id"])
+        for pid in rel_ids(row["properties"], "pain"):
+            t = hooks_by.setdefault(norm(pid), [0, 0]); t[0] += 1
+            if hid in burned: t[1] += 1
     rows = []
-    for r in d.get("results", []):
-        p = r["properties"]
+    for r in pains:
+        p = r["properties"]; pid = norm(r["id"])
         rows.append({"id": r["id"],
             "name": txt(p.get("Pain Name", {"type":"title","title":[]})) or "(untitled)",
             "cp": txt(p.get("Content Potential", {"type":"number","number":None})),
             "seg": txt(p.get("ICP Segment", {"type":"select","select":None})),
             "trig": txt(p.get("Emotional Trigger", {"type":"select","select":None})),
             "spot": txt(p.get("Poker Spot", {"type":"select","select":None})),
-            "quote": txt(p.get("User Quote", {"type":"rich_text","rich_text":[]}))})
-    rows.sort(key=lambda x: (x["cp"] is None, -(x["cp"] or 0)))
+            "quote": txt(p.get("User Quote", {"type":"rich_text","rich_text":[]})),
+            "ideas": ideas_by.get(pid, []), "posts": posts_by.get(pid, []),
+            "hk": hooks_by.get(pid, [0, 0])})
+        rows[-1]["used"] = len(rows[-1]["ideas"]) + len(rows[-1]["posts"])
+    rows.sort(key=lambda x: (x["used"], x["cp"] is None, -(x["cp"] or 0)))
     if a.top > 0: rows = rows[:a.top]
-    print(f"# {len(rows)} pains from ICP & Pain Database (Content Potential high->low)\n")
+    print(f"# {len(rows)} pains from ICP & Pain - LEAST-COVERED FIRST. "
+          f"used=ideas+posts already made; hooks=N(M used) library hooks (M already in a post). "
+          f"Prefer used=0; if you reuse a pain, take a NEW angle and don't repeat a used hook.\n")
     for x in rows:
         cp = x["cp"] if x["cp"] is not None else "-"
-        print(f"[id={x['id']}] CP={cp} | {x['name']}")
+        hk = f"{x['hk'][0]}" + (f"({x['hk'][1]} used)" if x["hk"][1] else "")
+        flag = "  <- FRESH" if x["used"] == 0 else ("  ** HEAVILY USED" if x["used"] >= 3 else "")
+        print(f"[id={x['id']}] CP={cp} ideas={len(x['ideas'])} posts={len(x['posts'])} hooks={hk} | {x['name']}{flag}")
         meta = " | ".join(f"{k}={v}" for k, v in
             (("seg",x["seg"]),("trigger",x["trig"]),("spot",x["spot"])) if v)
         if meta: print(f"    {meta}")
         if x["quote"]: print(f"    quote: \"{x['quote']}\"")
+        if x["used"]:
+            made = [f'"{t}"' for t in x["ideas"]] + [f'[POSTED] "{t}"' for t in x["posts"]]
+            print("    made: " + " | ".join(made[:6]))
         print()
 if __name__ == "__main__": main()
 MPMEOF
@@ -484,6 +539,7 @@ pain via Related Pain. Each line carries the hook id for save_content --hook-id.
 Usage: list_hooks.py [--pain-id <ICP row>] [--top N]"""
 import argparse, json, os, sys, urllib.request, urllib.error
 DB_ID = "358a5a3f-fec6-80a6-b912-f714680f4622"  # Hook Library
+PIPE_DB = "c3513c12-61f7-41d3-bebd-b8b9ff5583a0"  # Production Pipeline (flag used hooks)
 NOTION_VERSION = "2022-06-28"
 def txt(prop):
     t = prop["type"]
@@ -510,6 +566,19 @@ def main():
         with urllib.request.urlopen(req, timeout=20) as r: d = json.load(r)
     except urllib.error.HTTPError as e:
         print("ERROR", e.code, e.read().decode()[:400], file=sys.stderr); sys.exit(1)
+    burned = set()  # hook ids already used in a written post (Production Pipeline)
+    try:
+        preq = urllib.request.Request(f"https://api.notion.com/v1/databases/{PIPE_DB}/query",
+            data=json.dumps({"page_size": 100}).encode(), method="POST",
+            headers={"Authorization": f"Bearer {key}", "Notion-Version": NOTION_VERSION,
+                     "Content-Type": "application/json"})
+        with urllib.request.urlopen(preq, timeout=20) as pr: pdat = json.load(pr)
+        for row in pdat.get("results", []):
+            for nm, pp in row["properties"].items():
+                if pp.get("type") == "relation" and "hook" in nm.lower():
+                    for rr in pp["relation"]: burned.add(rr["id"].replace("-", ""))
+    except urllib.error.HTTPError:
+        pass  # neu loi, coi nhu chua co hook nao da dung
     rows = []
     for r in d.get("results", []):
         p = r["properties"]
@@ -519,6 +588,7 @@ def main():
             "perf": txt(p.get("Performance", {"type":"number","number":None})),
             "plat": txt(p.get("Platform", {"type":"select","select":None})),
             "type": txt(p.get("Hook Type", {"type":"multi_select","multi_select":[]})),
+            "used": r["id"].replace("-", "") in burned,
             "pains": txt(p.get("Related Pain", {"type":"relation","relation":[]}))})
     if a.pain_id:
         pid = a.pain_id.replace("-", "")
@@ -526,11 +596,12 @@ def main():
     rows.sort(key=lambda x: (x["perf"] is None, -(x["perf"] or 0)))
     if a.top > 0: rows = rows[:a.top]
     scope = f" linked to pain {a.pain_id}" if a.pain_id else ""
-    print(f"# {len(rows)} hooks from Hook Library{scope} (Performance high->low)\n")
+    print(f"# {len(rows)} hooks from Hook Library{scope} (Performance high->low). *** USED = already in a post; prefer a fresh one.\n")
     for x in rows:
         perf = x["perf"] if x["perf"] is not None else "-"
         tags = " ".join(f"[{t}]" for t in (x["plat"], x["type"]) if t)
-        print(f"[id={x['id']}] Perf={perf} {tags}")
+        used = "  *** USED (don't repeat)" if x["used"] else ""
+        print(f"[id={x['id']}] Perf={perf} {tags}{used}")
         print(f"    {x['hook']}")
         print()
 if __name__ == "__main__": main()
